@@ -14,6 +14,7 @@ public class ConsulLeaderElector implements Runnable {
 		private final String consulUrl;
 		private String serviceName;
 		private String routeId;
+		private Optional<String> sessionKey = Optional.empty();
 		private Builder(final String url) {
 			this.consulUrl = url;
 		}
@@ -70,5 +71,17 @@ public class ConsulLeaderElector implements Runnable {
 			logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
 			return Optional.empty();
 		}
+	}
+
+	private Optional<String> getSessionKey() {
+		if (!sessionKey.isPresent()) {
+			return createSession(consulUrl, serviceName);
+		} else {
+			return sessionKey;
+		}
+	}
+
+	private static Optional<String> createSession(final String consulUrl, final String serviceName) {
+		
 	}
 }
