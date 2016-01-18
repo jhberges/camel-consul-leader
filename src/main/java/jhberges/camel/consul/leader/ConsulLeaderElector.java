@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ConsulLeaderElector extends LifecycleStrategySupport implements Runnable {
 	public static class Builder {
+
 		public static final Builder forConsulHost(final String url) {
 			return new Builder(url);
 		}
@@ -51,7 +52,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 					Optional.ofNullable(username), Optional.ofNullable(password),
 					serviceName,
 					routeId, camelContext);
-			executor.scheduleAtFixedRate(consulLeaderElector, 1, 5, TimeUnit.SECONDS);
+			executor.scheduleAtFixedRate(consulLeaderElector, 1, POLL_INTERVAL, TimeUnit.SECONDS);
 			camelContext.addLifecycleStrategy(consulLeaderElector);
 			return consulLeaderElector;
 		}
@@ -83,6 +84,8 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		}
 	}
 
+	private static final int POLL_INTERVAL = 5;
+
 	private static final String CONTROLBUS_ROUTE = "controlbus:language:simple";
 
 	private static final Logger logger = LoggerFactory.getLogger(ConsulLeaderElector.class);
@@ -92,15 +95,24 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	private static Optional<String> createSession(final Executor executor, final String consulUrl, final String serviceName) {
 		HttpResponse response;
 		try {
+			final String sessionUrl = String.format("%s/v1/session/create", consulUrl);
+			final int ttlByInterval = (int) (POLL_INTERVAL * 1.5);
+			final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\"}",
+					serviceName,
+					10 > ttlByInterval ? 10 : ttlByInterval);
+			logger.debug("PUT {}\n{}", sessionUrl, sessionBody);
 			response = executor.execute(
-					Request.Put(String.format("%s/v1/session/create", consulUrl))
-							.bodyString(String.format("{\"Name\": \"%s\"}", serviceName), ContentType.APPLICATION_JSON)).returnResponse();
+					Request.Put(sessionUrl)
+							.bodyString(
+									sessionBody,
+									ContentType.APPLICATION_JSON)).returnResponse();
 			if (response.getStatusLine().getStatusCode() == 200) {
 				final Optional<String> newSessionKey = unpackSessionKey(response.getEntity());
 				logger.info("Consul sessionKey={}", newSessionKey);
 				return newSessionKey;
 			} else {
-				logger.warn("Unable to obtain sessionKey -- will continue as an island");
+				logger.warn("Unable to obtain sessionKey -- will continue as an island: {}",
+						EntityUtils.toString(response.getEntity()));
 				return Optional.empty();
 			}
 		} catch (final ClientProtocolException e) {
