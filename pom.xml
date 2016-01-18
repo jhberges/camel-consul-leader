@@ -132,4 +132,9 @@
 		<url>http://github.com/jhberges</url>
 
 	</organization>
+	<scm>
+		<url>scm:git:git@github.com:jhberges/camel-consul-leader.git</url>
+		<connection>scm:git:git@github.com:jhberges/camel-consul-leader.git</connection>
+		<developerConnection>scm:git:git@github.com:jhberges/camel-consul-leader.git</developerConnection>
+	</scm>
 </project>
