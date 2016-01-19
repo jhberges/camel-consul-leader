@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.jhberges</groupId>
 	<artifactId>camel-consul-leader</artifactId>
-	<version>1.0.2</version>
+	<version>1.0.3-SNAPSHOT</version>
 	<name>Camel Consul-backed Leader Election</name>
 	<url>http://github.com/jhberges/camel-consul-leader</url>
 	<inceptionYear>2015</inceptionYear>
