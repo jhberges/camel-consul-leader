@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.jhberges</groupId>
 	<artifactId>camel-consul-leader</artifactId>
-	<version>1.0.3-SNAPSHOT</version>
+	<version>1.0.2-SNAPSHOT</version>
 	<name>Camel Consul-backed Leader Election</name>
 	<url>http://github.com/jhberges/camel-consul-leader</url>
 	<inceptionYear>2015</inceptionYear>
-
+	<licenses>
+		<license>
+			<name>Apache License, Version 2.0</name>
+			<url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+			<distribution>repo</distribution>
+			<comments>A business-friendly OSS license</comments>
+		</license>
+	</licenses>
 
 	<properties>
 		<camel.version>2.16.1</camel.version>
@@ -141,12 +149,30 @@
 	<organization>
 		<name>jhberges</name>
 		<url>http://github.com/jhberges</url>
-
 	</organization>
+	<contributors>
+		<contributor>
+			<name>Jan-Helge Bergesen</name>
+			<organizationUrl>http://github.com/jhberges</organizationUrl>
+			<roles>	
+				<role>Developer</role>
+				<role>Initiator</role>
+			</roles>
+		</contributor>
+	</contributors>
 	<scm>
 		<url>scm:git:git@github.com:jhberges/camel-consul-leader.git</url>
 		<connection>scm:git:git@github.com:jhberges/camel-consul-leader.git</connection>
 		<developerConnection>scm:git:git@github.com:jhberges/camel-consul-leader.git</developerConnection>
 		<tag>HEAD</tag>
 	</scm>
+	<issueManagement>
+		<system>GitHub</system>
+		<url>https://github.com/jhberges/camel-consul-leader/issues</url>
+	</issueManagement>
+	<ciManagement>
+		<system>CircleCI</system>
+		<url>https://circleci.com/gh/jhberges/camel-consul-leader</url>
+	</ciManagement>
+	<description>Camel Consul-backed Leader Election, using Consul's session locks and Camel's controlbus</description>
 </project>
