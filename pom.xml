@@ -149,16 +149,17 @@
 		<name>jhberges</name>
 		<url>http://github.com/jhberges</url>
 	</organization>
-	<contributors>
-		<contributor>
+	<developers>
+		<developer>
 			<name>Jan-Helge Bergesen</name>
 			<organizationUrl>http://github.com/jhberges</organizationUrl>
+			<timezone>CET</timezone>
 			<roles>	
 				<role>Developer</role>
 				<role>Initiator</role>
 			</roles>
-		</contributor>
-	</contributors>
+		</developer>
+	</developers>
 	<scm>
 		<url>scm:git:git@github.com:jhberges/camel-consul-leader.git</url>
 		<connection>scm:git:git@github.com:jhberges/camel-consul-leader.git</connection>
