@@ -7,6 +7,7 @@
 	<name>Camel Consul-backed Leader Election</name>
 	<url>http://github.com/jhberges/camel-consul-leader</url>
 	<inceptionYear>2015</inceptionYear>
+	<description>Camel Consul-backed Leader Election, using Consul's session locks and Camel's controlbus</description>
 	<licenses>
 		<license>
 			<name>Apache License, Version 2.0</name>
@@ -23,6 +24,11 @@
 		<fluent-hc.version>4.5.1</fluent-hc.version>
 		<jackson.version>2.6.4</jackson.version>
 		<junit.version>4.12</junit.version>
+		<nexus-staging-maven-plugin.version>1.6.3</nexus-staging-maven-plugin.version>
+		<maven-gpg-plugin.version>1.5</maven-gpg-plugin.version>
+		<maven-source-plugin.version>2.2.1</maven-source-plugin.version>
+		<maven-release-plugin.version>2.5</maven-release-plugin.version>
+		<maven-javadoc-plugin.version>2.9.1</maven-javadoc-plugin.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -75,7 +81,7 @@
 			<plugin>
 				<groupId>org.sonatype.plugins</groupId>
 				<artifactId>nexus-staging-maven-plugin</artifactId>
-				<version>1.6.3</version>
+				<version>${nexus-staging-maven-plugin.version}</version>
 				<extensions>true</extensions>
 				<configuration>
 					<serverId>ossrh</serverId>
@@ -94,7 +100,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-gpg-plugin</artifactId>
-				<version>1.5</version>
+				<version>${maven-gpg-plugin.version}</version>
 				<executions>
 					<execution>
 						<id>sign-artifacts</id>
@@ -108,7 +114,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-source-plugin</artifactId>
-				<version>2.2.1</version>
+				<version>${maven-source-plugin.version}</version>
 				<executions>
 					<execution>
 						<id>attach-sources</id>
@@ -121,7 +127,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-release-plugin</artifactId>
-				<version>2.5</version>
+				<version>${maven-release-plugin.version}</version>
 				<configuration>
 					<autoVersionSubmodules>true</autoVersionSubmodules>
 					<useReleaseProfile>false</useReleaseProfile>
@@ -133,7 +139,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-javadoc-plugin</artifactId>
-				<version>2.9.1</version>
+				<version>${maven-javadoc-plugin.version}</version>
 				<executions>
 					<execution>
 						<id>attach-javadocs</id>
@@ -174,5 +180,4 @@
 		<system>CircleCI</system>
 		<url>https://circleci.com/gh/jhberges/camel-consul-leader</url>
 	</ciManagement>
-	<description>Camel Consul-backed Leader Election, using Consul's session locks and Camel's controlbus</description>
 </project>
