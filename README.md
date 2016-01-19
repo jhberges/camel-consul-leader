@@ -17,6 +17,9 @@ Add the following to your POM:
 
 Where `${camel-consul-leader.version} is a property containing a released version of this artifact.
 
+The artifact is published via [Sonatype's OSS repository manager](http://oss.sonatype.org), and is synced to Maven Central from there.
+Hence propagation to central is on it's terms.
+
 ### Mark the route to be controlled as non-autostartup
 
 For example:
