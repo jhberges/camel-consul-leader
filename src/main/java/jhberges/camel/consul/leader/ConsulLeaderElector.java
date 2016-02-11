@@ -42,6 +42,8 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
         private String username;
         private String password;
         private ScheduledExecutorService executor;
+        private int ttlInSeconds = 60;
+        private int lockDelayInSeconds = 0;
 
         private Builder(final String url) {
             this.consulUrl = url;
@@ -52,7 +54,8 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
                     consulUrl,
                     Optional.ofNullable(username), Optional.ofNullable(password),
                     serviceName,
-                    routeId, camelContext);
+                    routeId, camelContext,
+                    ttlInSeconds, lockDelayInSeconds);
             executor.scheduleAtFixedRate(consulLeaderElector, 1, POLL_INTERVAL, TimeUnit.SECONDS);
             camelContext.addLifecycleStrategy(consulLeaderElector);
             return consulLeaderElector;
@@ -83,6 +86,16 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
             this.serviceName = serviceName;
             return this;
         }
+
+        public Builder usingTimeToLive(final int seconds) {
+            this.ttlInSeconds = seconds;
+            return this;
+        }
+
+        public Builder usingLockDelay(final int seconds) {
+            this.lockDelayInSeconds = seconds;
+            return this;
+        }
     }
 
     private static final int POLL_INTERVAL = 5;
@@ -93,16 +106,14 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static Optional<String> createSession(final Executor executor, final String consulUrl, final String serviceName) {
+    private static Optional<String> createSession(final Executor executor, final String consulUrl, final String serviceName, final int ttlInSeconds, final int lockDelayInSeconds) {
         HttpResponse response;
         try {
             final String sessionUrl = String.format("%s/v1/session/create", consulUrl);
-            final int ttlByInterval = (int) (POLL_INTERVAL * 1.5);
-            final int timeBlock = (int) (POLL_INTERVAL * 0.5);
             final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\", \"LockDelay\" : \"%ds\"}",
                     serviceName,
-                    10 > ttlByInterval ? 10 : ttlByInterval,
-                    5 > timeBlock ? 5 : timeBlock);
+                    10 > ttlInSeconds ? 10 : ttlInSeconds,
+                    0 > ttlInSeconds ? 0 : ttlInSeconds);
             logger.debug("PUT {}\n{}", sessionUrl, sessionBody);
             response = executor.execute(
                     Request.Put(sessionUrl)
@@ -173,10 +184,10 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 
     private static boolean renewSession(final Executor executor, final String url, final String _sessionKey) throws IOException {
         final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
-        logger.debug("PUT {}", uri);
+        logger.info("PUT {}", uri);
         final Response response = executor.execute(Request.Put(uri));
         final boolean renewedOk = response.returnResponse().getStatusLine().getStatusCode() == 200;
-        logger.debug("Session {} renewed={}", _sessionKey, renewedOk);
+        logger.info("Session {} renewed={}", _sessionKey, renewedOk);
         return renewedOk;
     }
 
@@ -210,7 +221,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 
     protected ConsulLeaderElector(
             final String consulUrl, final Optional<String> username, final Optional<String> password, final String serviceName,
-            final String routeToControl, final CamelContext camelContext) throws Exception {
+            final String routeToControl, final CamelContext camelContext, final int ttlInseconds, final int lockDelayInSeconds) throws Exception {
         this.consulUrl = consulUrl;
         this.serviceName = serviceName;
         this.routeToControl = routeToControl;
@@ -223,12 +234,12 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
                     .auth(username.get(), password.get())
                     .authPreemptive(new HttpHost(new URL(consulUrl).getHost()));
         }
-        this.sessionKey = getSessionKey();
+        this.sessionKey = getSessionKey(ttlInseconds, lockDelayInSeconds);
     }
 
-    private Optional<String> getSessionKey() {
+    private Optional<String> getSessionKey(final int ttlInseconds, final int lockDelayInSeconds) {
         if (!sessionKey.isPresent()) {
-            return createSession(executor, consulUrl, serviceName);
+            return createSession(executor, consulUrl, serviceName, ttlInseconds, lockDelayInSeconds);
         } else {
             return sessionKey;
         }
@@ -237,7 +248,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
     @Override
     public void onContextStop(final CamelContext context) {
         super.onContextStop(context);
-        final Optional<String> sessionKey = getSessionKey();
+        final Optional<String> sessionKey = getSessionKey(2, 0);
         sessionKey.ifPresent(_sessionKey -> {
             logger.info("Releasing Consul session");
             final String uri = leaderKey(consulUrl, serviceName, "release", _sessionKey);
