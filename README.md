@@ -37,6 +37,8 @@ For example:
       .inCamelContext(camelContext)         // The Camel context to operate in
       .usingServiceName("service-name")     // camel-consul-leader will register the key: service/<service-name>/leader and use this for session-locking
       .usingExecutor(executor)              // Execution service to use
+      .usingLockDelay(consulLockDelay)      // "lock-delay" (see https://www.consul.io/docs/internals/sessions.html for details)
+      .usingTimeToLive(consulSessionTTL)    // TimeToLive for the session (in seconds)
       .build();                             // Registers and starts the service
 
 ### Island-mode
