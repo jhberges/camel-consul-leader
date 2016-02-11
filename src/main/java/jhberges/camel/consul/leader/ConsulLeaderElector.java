@@ -97,9 +97,11 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		try {
 			final String sessionUrl = String.format("%s/v1/session/create", consulUrl);
 			final int ttlByInterval = (int) (POLL_INTERVAL * 1.5);
-			final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\"}",
+			final int timeBlock = (int) (POLL_INTERVAL * 0.5);
+			final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\", \"LockDelay\" : \"%ds\"}",
 					serviceName,
-					10 > ttlByInterval ? 10 : ttlByInterval);
+					10 > ttlByInterval ? 10 : ttlByInterval,
+					5 > timeBlock ? 5 : timeBlock);
 			logger.debug("PUT {}\n{}", sessionUrl, sessionBody);
 			response = executor.execute(
 					Request.Put(sessionUrl)
@@ -149,13 +151,17 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 			final String serviceName) {
 		return sessionKey.map(_sessionKey -> {
 			try {
-				final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
-				logger.debug("PUT {}", uri);
-				final Response response = executor.execute(Request
-						.Put(uri));
-				final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
-				logger.debug("Result: {}", result);
-				return result;
+			        if (renewSession(executor, url, _sessionKey)) {
+        				final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
+        				logger.debug("PUT {}", uri);
+        				final Response response = executor.execute(Request
+        						.Put(uri));
+        				final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
+        				logger.debug("Result: {}", result);
+        				return result;
+			        } else {
+			            return Optional.of(false);
+			        }
 			} catch (final Exception exception) {
 				logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
 				return Optional.<Boolean> empty();
@@ -163,7 +169,14 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		}).orElse(Optional.empty());
 	}
 
-	private static Optional<String> unpackSessionKey(final HttpEntity entity) {
+	private static boolean renewSession(final Executor executor, final String url, final String _sessionKey) throws IOException {
+            final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
+            logger.debug("PUT {}", uri);
+            final Response response = executor.execute(Request.Put(uri));
+            return response.returnResponse().getStatusLine().getStatusCode() == 200;
+	}
+
+    private static Optional<String> unpackSessionKey(final HttpEntity entity) {
 		try {
 			final Map<String, String> map = objectMapper.readValue(entity.getContent(), new TypeReference<Map<String, String>>() {
 			});
