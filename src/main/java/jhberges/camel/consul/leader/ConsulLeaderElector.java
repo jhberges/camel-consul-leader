@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
+import org.apache.camel.ServiceStatus;
 import org.apache.camel.impl.DefaultProducerTemplate;
 import org.apache.camel.support.LifecycleStrategySupport;
 import org.apache.http.HttpEntity;
@@ -173,7 +174,9 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
             final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
             logger.debug("PUT {}", uri);
             final Response response = executor.execute(Request.Put(uri));
-            return response.returnResponse().getStatusLine().getStatusCode() == 200;
+            final boolean renewedOk = response.returnResponse().getStatusLine().getStatusCode() == 200;
+            logger.debug("Session {} renewed={}", _sessionKey, renewedOk);
+            return renewedOk;
 	}
 
     private static Optional<String> unpackSessionKey(final HttpEntity entity) {
@@ -202,12 +205,15 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 
 	private final Executor executor;
 
+        private CamelContext camelContext;
+
 	protected ConsulLeaderElector(
 			final String consulUrl, final Optional<String> username, final Optional<String> password, final String serviceName,
 			final String routeToControl, final CamelContext camelContext) throws Exception {
 		this.consulUrl = consulUrl;
 		this.serviceName = serviceName;
 		this.routeToControl = routeToControl;
+                this.camelContext = camelContext;
 		this.producerTemplate = DefaultProducerTemplate.newInstance(camelContext, CONTROLBUS_ROUTE);
 		this.producerTemplate.start();
 		this.executor = Executor.newInstance();
@@ -252,13 +258,14 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	public void run() {
 		final Optional<Boolean> isLeader = pollConsul(executor, consulUrl, sessionKey, serviceName);
 		try {
-			if (isLeader.orElse(true)) { // I.e if explicitly leader, or poll
-											// failed.
+			if (isLeader.orElse(true)) { // I.e if explicitly leader, or poll failed.
+			    if (!isRunning(routeToControl)) {
 				logger.info("Starting route={}", routeToControl);
 				producerTemplate.sendBody(
 						CONTROLBUS_ROUTE,
 						String.format("${camelContext.startRoute(\"%s\")}", routeToControl));
-			} else {
+			    }
+			} else if (isRunning(routeToControl)) {
 				logger.info("Stopping route={}", routeToControl);
 				producerTemplate.sendBody(
 						CONTROLBUS_ROUTE,
@@ -268,4 +275,9 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 			logger.error("Exception during route management", exc);
 		}
 	}
+
+        private boolean isRunning(final String routeToControl) {
+            final ServiceStatus routeStatus = camelContext.getRouteStatus(routeToControl);
+            return Objects.nonNull(routeStatus) && (routeStatus.isStarted() || routeStatus.isStarting());
+        }
 }
