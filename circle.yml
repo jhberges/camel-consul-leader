@@ -2,8 +2,3 @@ machine:
   java:
     version: oraclejdk8
 
-staging:
-  branch: master
-    commands:
-      - mvn deploy
-
