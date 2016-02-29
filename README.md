@@ -39,6 +39,8 @@ For example:
       .usingExecutor(executor)              // Execution service to use
       .usingLockDelay(consulLockDelay)      // "lock-delay" (see https://www.consul.io/docs/internals/sessions.html for details)
       .usingTimeToLive(consulSessionTTL)    // TimeToLive for the session (in seconds)
+      .withPollConfiguration(initialDelay, 
+                              pollInterval) // Time before, and between polls (seconds)
       .build();                             // Registers and starts the service
 
 ### Island-mode
