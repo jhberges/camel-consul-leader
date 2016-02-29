@@ -247,6 +247,24 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		this.sessionKey = getSessionKey(ttlInseconds, lockDelayInSeconds);
 	}
 
+	private void destroySession(final Optional<String> sessionKey) {
+		sessionKey.ifPresent(_sessionKey -> {
+			logger.info("Releasing Consul session");
+			final String uri = leaderKey(consulUrl, serviceName, "release", _sessionKey);
+			logger.debug("PUT {}", uri);
+			try {
+				final Response response = executor.execute(Request
+						.Put(uri));
+				final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
+				logger.debug("Result: {}", result);
+
+				destroySession(executor, consulUrl, _sessionKey);
+			} catch (final Exception e) {
+				logger.warn("Failed to release session key in Consul: {}", e);
+			}
+		});
+	}
+
 	private Optional<String> getSessionKey(final int ttlInseconds, final int lockDelayInSeconds) {
 		if (!sessionKey.isPresent()) {
 			return createSession(executor, consulUrl, serviceName, ttlInseconds, lockDelayInSeconds);
@@ -264,21 +282,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	public void onContextStop(final CamelContext context) {
 		super.onContextStop(context);
 		final Optional<String> sessionKey = getSessionKey(2, 0);
-		sessionKey.ifPresent(_sessionKey -> {
-			logger.info("Releasing Consul session");
-			final String uri = leaderKey(consulUrl, serviceName, "release", _sessionKey);
-			logger.debug("PUT {}", uri);
-			try {
-				final Response response = executor.execute(Request
-						.Put(uri));
-				final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
-				logger.debug("Result: {}", result);
-
-				destroySession(executor, consulUrl, _sessionKey);
-			} catch (final Exception e) {
-				logger.warn("Failed to release session key in Consul: {}", e);
-			}
-		});
+		destroySession(sessionKey);
 	}
 
 	@Override
