@@ -174,13 +174,17 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		return sessionKey.map(_sessionKey -> {
 			try {
 				if (renewSession(executor, url, _sessionKey)) {
-					final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
-					logger.debug("PUT {}", uri);
-					final Response response = executor.execute(Request
-							.Put(uri));
-					final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
-					logger.debug("Result: {}", result);
-					return result;
+                    if(isCurrentLeader(executor, url, serviceName,sessionKey)){
+                        return Optional.of(true);
+                    }else {
+                        final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
+                        logger.debug("PUT {}", uri);
+                        final Response response = executor.execute(Request
+                                .Put(uri));
+                        final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
+                        logger.debug("Result: {}", result);
+                        return result;
+                    }
 				} else {
 					return Optional.of(false);
 				}
@@ -190,6 +194,49 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 			}
 		}).orElse(Optional.empty());
 	}
+
+	private static String leaderKeyInfo(final String baseUrl, final String serviceName) {
+		return String.format("%s/v1/kv/service/%s/leader", baseUrl, serviceName);
+	}
+
+	private static boolean isCurrentLeader(final Executor executor, final String url, final String serviceName, final Optional<String> sessionKey){
+		return sessionKey.map(_sessionKey -> {
+            try{
+                final String uri = leaderKeyInfo(url, serviceName);
+                logger.debug("GET {}", uri);
+                final HttpResponse response = executor.execute(Request
+                        .Get(uri))
+                        .returnResponse();
+                if (response.getStatusLine().getStatusCode() == 200) {
+                    final Optional<String> leaderSessionKey = unpackCurrentSessionOnKey(response.getEntity());
+                    logger.debug("Consul current leader: service=\"{}\", sessionKey=\"{}\"", serviceName, leaderSessionKey);
+                    return leaderSessionKey.map(s -> s.equals(_sessionKey)).isPresent();
+                } else {
+                    logger.debug("Unable to obtain current leader -- will continue as an not the current leader: {}",
+                            EntityUtils.toString(response.getEntity()));
+                    return Boolean.FALSE;
+                }
+            } catch (final Exception exception) {
+                logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
+                return Boolean.FALSE;
+            }
+		}).orElse(Boolean.FALSE);
+	}
+
+    private static Optional<String> unpackCurrentSessionOnKey(final HttpEntity entity){
+        try {
+            final Map<String, String> map = objectMapper.readValue(entity.getContent(), new TypeReference<Map<String, String>>() {
+            });
+            if (Objects.nonNull(map) && map.containsKey("Session")) {
+                return Optional.ofNullable(map.get("Session"));
+            } else {
+                logger.debug("What? No leadership?");
+            }
+        } catch (UnsupportedOperationException | IOException e) {
+            logger.warn("Failed to parse JSON: %s\n %s", entity.toString(), e.getMessage());
+        }
+        return Optional.empty();
+    }
 
 	private static boolean renewSession(final Executor executor, final String url, final String _sessionKey) throws IOException {
 		final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
