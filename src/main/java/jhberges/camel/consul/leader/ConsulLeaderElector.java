@@ -2,6 +2,7 @@ package jhberges.camel.consul.leader;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -175,8 +176,10 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 			try {
 				if (renewSession(executor, url, _sessionKey)) {
                     if(isCurrentLeader(executor, url, serviceName,sessionKey)){
+						logger.debug("I am the current leader, no need to acquire leadership");
                         return Optional.of(true);
                     }else {
+						logger.debug("I am not the current leader, and I need to acquire leadership");
                         final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
                         logger.debug("PUT {}", uri);
                         final Response response = executor.execute(Request
@@ -225,15 +228,14 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 
     private static Optional<String> unpackCurrentSessionOnKey(final HttpEntity entity){
         try {
-            final Map<String, String> map = objectMapper.readValue(entity.getContent(), new TypeReference<Map<String, String>>() {
+            final List<Map<String, String>> mapList = objectMapper.readValue(entity.getContent(), new TypeReference<List<Map<String, String>>>() {
             });
-            if (Objects.nonNull(map) && map.containsKey("Session")) {
-                return Optional.ofNullable(map.get("Session"));
-            } else {
-                logger.debug("What? No leadership?");
-            }
-        } catch (UnsupportedOperationException | IOException e) {
-            logger.warn("Failed to parse JSON: %s\n %s", entity.toString(), e.getMessage());
+			if(Objects.nonNull(mapList)){
+				return mapList.stream().findFirst()
+						.map(stringStringMap -> stringStringMap.get("Session"));
+			}
+		} catch (UnsupportedOperationException | IOException e) {
+            logger.warn("Failed to parse JSON: {}\n {}", entity.toString(), e.getMessage());
         }
         return Optional.empty();
     }
@@ -257,7 +259,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 				logger.warn("What? No \"ID\"?");
 			}
 		} catch (UnsupportedOperationException | IOException e) {
-			logger.warn("Failed to parse JSON: %s\n %s", entity.toString(), e.getMessage());
+			logger.warn("Failed to parse JSON: {}\n {}", entity.toString(), e.getMessage());
 		}
 		return Optional.empty();
 	}
