@@ -2,6 +2,7 @@ package jhberges.camel.consul.leader;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -174,13 +175,19 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		return sessionKey.map(_sessionKey -> {
 			try {
 				if (renewSession(executor, url, _sessionKey)) {
-					final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
-					logger.debug("PUT {}", uri);
-					final Response response = executor.execute(Request
-							.Put(uri));
-					final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
-					logger.debug("Result: {}", result);
-					return result;
+                    if(isCurrentLeader(executor, url, serviceName,sessionKey)){
+						logger.debug("I am the current leader, no need to acquire leadership");
+                        return Optional.of(true);
+                    }else {
+						logger.debug("I am not the current leader, and I need to acquire leadership");
+                        final String uri = leaderKey(url, serviceName, "acquire", _sessionKey);
+                        logger.debug("PUT {}", uri);
+                        final Response response = executor.execute(Request
+                                .Put(uri));
+                        final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
+                        logger.debug("Result: {}", result);
+                        return result;
+                    }
 				} else {
 					return Optional.of(false);
 				}
@@ -190,6 +197,48 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 			}
 		}).orElse(Optional.empty());
 	}
+
+	private static String leaderKeyInfo(final String baseUrl, final String serviceName) {
+		return String.format("%s/v1/kv/service/%s/leader", baseUrl, serviceName);
+	}
+
+	private static boolean isCurrentLeader(final Executor executor, final String url, final String serviceName, final Optional<String> sessionKey){
+		return sessionKey.map(_sessionKey -> {
+            try{
+                final String uri = leaderKeyInfo(url, serviceName);
+                logger.debug("GET {}", uri);
+                final HttpResponse response = executor.execute(Request
+                        .Get(uri))
+                        .returnResponse();
+                if (response.getStatusLine().getStatusCode() == 200) {
+                    final Optional<String> leaderSessionKey = unpackCurrentSessionOnKey(response.getEntity());
+                    logger.debug("Consul current leader: service=\"{}\", sessionKey=\"{}\"", serviceName, leaderSessionKey);
+                    return leaderSessionKey.map(s -> s.equals(_sessionKey)).isPresent();
+                } else {
+                    logger.debug("Unable to obtain current leader -- will continue as an not the current leader: {}",
+                            EntityUtils.toString(response.getEntity()));
+                    return Boolean.FALSE;
+                }
+            } catch (final Exception exception) {
+                logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
+                return Boolean.FALSE;
+            }
+		}).orElse(Boolean.FALSE);
+	}
+
+    private static Optional<String> unpackCurrentSessionOnKey(final HttpEntity entity){
+        try {
+            final List<Map<String, String>> mapList = objectMapper.readValue(entity.getContent(), new TypeReference<List<Map<String, String>>>() {
+            });
+			if(Objects.nonNull(mapList)){
+				return mapList.stream().findFirst()
+						.map(stringStringMap -> stringStringMap.get("Session"));
+			}
+		} catch (UnsupportedOperationException | IOException e) {
+            logger.warn("Failed to parse JSON: {}\n {}", entity.toString(), e.getMessage());
+        }
+        return Optional.empty();
+    }
 
 	private static boolean renewSession(final Executor executor, final String url, final String _sessionKey) throws IOException {
 		final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
@@ -210,7 +259,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 				logger.warn("What? No \"ID\"?");
 			}
 		} catch (UnsupportedOperationException | IOException e) {
-			logger.warn("Failed to parse JSON: %s\n %s", entity.toString(), e.getMessage());
+			logger.warn("Failed to parse JSON: {}\n {}", entity.toString(), e.getMessage());
 		}
 		return Optional.empty();
 	}
