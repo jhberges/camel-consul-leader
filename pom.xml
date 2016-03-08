@@ -165,6 +165,14 @@
 				<role>Initiator</role>
 			</roles>
 		</developer>
+		<developer>
+			<name>Steffen Jørgensen</name>
+			<organizationUrl>http://github.com/mrsteffenjo</organizationUrl>
+			<timezone>CET</timezone>
+			<roles>	
+				<role>Developer</role>
+			</roles>
+		</developer>
 	</developers>
 	<scm>
 		<url>scm:git:git@github.com:jhberges/camel-consul-leader.git</url>
