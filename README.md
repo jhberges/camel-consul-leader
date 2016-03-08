@@ -60,3 +60,10 @@ The following time values are hardcoded at the time of writing:
 
 * Consul documentation of Leader-Election:  https://www.consul.io/docs/guides/leader-election.html
 * Camel controlbus: http://camel.apache.org/controlbus.html
+
+# Contributing
+
+Contributions are welcome and are preferred in form of normal pull requests.
+
+## Code format
+This repo prefers TABs over SPACEs, and generally follow more or less normal Sun Java conventions :-p 
