@@ -6,15 +6,14 @@ import java.util.Optional;
 import org.apache.camel.CamelContext;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.ServiceStatus;
-import org.apache.camel.impl.DefaultProducerTemplate;
 import org.apache.camel.support.LifecycleStrategySupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ConsulLeaderElector extends LifecycleStrategySupport implements Runnable {
 
-	private static final String CONTROLBUS_ROUTE = "controlbus:language:simple";
-
+	static Runnable TERMINATION_CALLBACK = () -> System.exit(1);
+	static final String CONTROLBUS_ROUTE = "controlbus:language:simple";
 	private static final Logger logger = LoggerFactory.getLogger(ConsulLeaderElector.class);
 
 	private final String routeToControl;
@@ -27,18 +26,19 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	protected ConsulLeaderElector(
 			final ConsulFacadeBean consulFacade,
 			final String serviceName,
-			final String routeToControl, final CamelContext camelContext, final int ttlInseconds, final int lockDelayInSeconds,
+			final String routeToControl, final CamelContext camelContext, final ProducerTemplate producerTemplate,
+			final int ttlInseconds, final int lockDelayInSeconds,
 			final boolean allowIslandMode, final int createSessionTries, final int retryPeriod, final double backOffMultiplier)
 					throws Exception {
 		this.consulFacade = consulFacade;
 		this.serviceName = serviceName;
 		this.routeToControl = routeToControl;
 		this.camelContext = camelContext;
-		this.producerTemplate = DefaultProducerTemplate.newInstance(camelContext, CONTROLBUS_ROUTE);
-		this.producerTemplate.start();
+		this.producerTemplate = producerTemplate;
 		this.sessionKey = getSessionKey(ttlInseconds, lockDelayInSeconds, createSessionTries, retryPeriod, backOffMultiplier);
 		if (!this.sessionKey.isPresent() && !allowIslandMode) {
 			logger.error("Island mode disabled -- terminating abruptly!");
+			TERMINATION_CALLBACK.run();
 		}
 	}
 

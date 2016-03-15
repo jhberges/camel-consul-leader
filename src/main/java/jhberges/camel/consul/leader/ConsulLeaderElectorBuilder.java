@@ -5,6 +5,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.CamelContext;
+import org.apache.camel.ProducerTemplate;
+import org.apache.camel.impl.DefaultProducerTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,18 +49,21 @@ public class ConsulLeaderElectorBuilder {
 	}
 
 	public ConsulLeaderElector build() throws Exception {
+		final ProducerTemplate producerTemplate = DefaultProducerTemplate.newInstance(camelContext, ConsulLeaderElector.CONTROLBUS_ROUTE);
 		final ConsulLeaderElector consulLeaderElector = new ConsulLeaderElector(
 				new ConsulFacadeBean(
 						consulUrl,
 						Optional.ofNullable(username), Optional.ofNullable(password)),
 				serviceName,
-				routeId, camelContext,
+				routeId, camelContext, producerTemplate,
 				ttlInSeconds, lockDelayInSeconds,
 				allowIslandMode,
 				createSessionTries, retryPeriod, backOffMultiplier);
 		logger.debug("pollInitialDelay={} pollInterval={}", pollInitialDelay, pollInterval);
 		executor.scheduleAtFixedRate(consulLeaderElector, pollInitialDelay, pollInterval, TimeUnit.SECONDS);
 		camelContext.addLifecycleStrategy(consulLeaderElector);
+		producerTemplate.start();
+
 		return consulLeaderElector;
 	}
 
