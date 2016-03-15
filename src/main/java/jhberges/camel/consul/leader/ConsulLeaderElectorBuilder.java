@@ -1,5 +1,6 @@
 package jhberges.camel.consul.leader;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -49,6 +50,7 @@ public class ConsulLeaderElectorBuilder {
 	}
 
 	public ConsulLeaderElector build() throws Exception {
+		Objects.requireNonNull(camelContext, "No CamelContext provided!");
 		final ProducerTemplate producerTemplate = DefaultProducerTemplate.newInstance(camelContext, ConsulLeaderElector.CONTROLBUS_ROUTE);
 		final ConsulLeaderElector consulLeaderElector = new ConsulLeaderElector(
 				new ConsulFacadeBean(
