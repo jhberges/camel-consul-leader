@@ -29,31 +29,6 @@ public class ConsulFacadeBean {
 
 	private static final ObjectMapper objectMapper = new ObjectMapper();
 
-	private static boolean isCurrentLeader(final Executor executor, final String url, final String serviceName,
-			final Optional<String> sessionKey) {
-		return sessionKey.map(_sessionKey -> {
-			try {
-				final String uri = leaderKeyInfo(url, serviceName);
-				logger.debug("GET {}", uri);
-				final HttpResponse response = executor.execute(Request
-						.Get(uri))
-						.returnResponse();
-				if (response.getStatusLine().getStatusCode() == 200) {
-					final Optional<String> leaderSessionKey = unpackCurrentSessionOnKey(response.getEntity());
-					logger.debug("Consul current leader: service=\"{}\", sessionKey=\"{}\"", serviceName, leaderSessionKey);
-					return leaderSessionKey.map(s -> s.equals(_sessionKey)).isPresent();
-				} else {
-					logger.debug("Unable to obtain current leader -- will continue as an not the current leader: {}",
-							EntityUtils.toString(response.getEntity()));
-					return Boolean.FALSE;
-				}
-			} catch (final Exception exception) {
-				logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
-				return Boolean.FALSE;
-			}
-		}).orElse(Boolean.FALSE);
-	}
-
 	private static String leaderKey(final String baseUrl, final String serviceName, final String command, final String sessionKey) {
 		return String.format("%s/v1/kv/service/%s/leader?%s=%s", baseUrl, serviceName, command, sessionKey);
 	}
@@ -111,10 +86,16 @@ public class ConsulFacadeBean {
 
 	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password)
 			throws MalformedURLException {
+		this(consulUrl, username, password, Executor.newInstance());
+	}
+
+	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password,
+			final Executor executor)
+					throws MalformedURLException {
 		this.consulUrl = consulUrl;
 		this.username = username;
 		this.password = password;
-		this.executor = Executor.newInstance();
+		this.executor = executor;
 		if (username.isPresent()) {
 			executor
 					.auth(username.get(), password.get())
@@ -202,12 +183,36 @@ public class ConsulFacadeBean {
 
 	}
 
+	public boolean isCurrentLeader(final String url, final String serviceName, final Optional<String> sessionKey) {
+		return sessionKey.map(_sessionKey -> {
+			try {
+				final String uri = leaderKeyInfo(url, serviceName);
+				logger.debug("GET {}", uri);
+				final HttpResponse response = executor.execute(Request
+						.Get(uri))
+						.returnResponse();
+				if (response.getStatusLine().getStatusCode() == 200) {
+					final Optional<String> leaderSessionKey = unpackCurrentSessionOnKey(response.getEntity());
+					logger.debug("Consul current leader: service=\"{}\", sessionKey=\"{}\"", serviceName, leaderSessionKey);
+					return leaderSessionKey.map(s -> s.equals(_sessionKey)).isPresent();
+				} else {
+					logger.debug("Unable to obtain current leader -- will continue as an not the current leader: {}",
+							EntityUtils.toString(response.getEntity()));
+					return Boolean.FALSE;
+				}
+			} catch (final Exception exception) {
+				logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
+				return Boolean.FALSE;
+			}
+		}).orElse(Boolean.FALSE);
+	}
+
 	public Optional<Boolean> pollConsul(final Optional<String> sessionKey,
 			final String serviceName) {
 		return sessionKey.map(_sessionKey -> {
 			try {
 				if (renewSession(executor, consulUrl, _sessionKey)) {
-					if (isCurrentLeader(executor, consulUrl, serviceName, sessionKey)) {
+					if (isCurrentLeader(consulUrl, serviceName, sessionKey)) {
 						logger.debug("I am the current leader, no need to acquire leadership");
 						return Optional.of(true);
 					} else {
