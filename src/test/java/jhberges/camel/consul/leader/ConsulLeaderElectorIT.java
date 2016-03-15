@@ -41,7 +41,7 @@ public class ConsulLeaderElectorIT {
 		Assume.assumeThat("No consul!", statusCode, IsEqual.equalTo(200));
 
 		final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-		ConsulLeaderElector.Builder
+		ConsulLeaderElectorBuilder
 				.forConsulHost(LOCAL_CONSUL)
 				.controllingRoute(ROUTE_ID)
 				.inCamelContext(camelContext)
