@@ -39,6 +39,10 @@ For example:
       .usingExecutor(executor)              // Execution service to use
       .usingLockDelay(consulLockDelay)      // "lock-delay" (see https://www.consul.io/docs/internals/sessions.html for details)
       .usingTimeToLive(consulSessionTTL)    // TimeToLive for the session (in seconds)
+      .usingRetryStrategy(countOfTries,     // Strategy for creating session in Consul
+                          retryPeriodBase,  // Default: tries=5, period=2 (seconds), backOff=1.5
+                          backOffMultiplier)
+      .allowingIslandMode(flag)             // If set to `false` the component will terminate your app with `System.exit(1);`
       .withPollConfiguration(initialDelay, 
                               pollInterval) // Time before, and between polls (seconds)
       .build();                             // Registers and starts the service

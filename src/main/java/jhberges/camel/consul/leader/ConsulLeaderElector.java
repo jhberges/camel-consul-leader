@@ -30,7 +30,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ConsulLeaderElector extends LifecycleStrategySupport implements Runnable {
+
 	public static class Builder {
+
+		private static final double DEFAULT_BACKOFF_MULTIPLIER = 1.5;
+		private static final int DEFAULT_TRIES = 5;
+		private static final int DEFAULT_RETRY_PERIOD = 2;
 
 		public static final Builder forConsulHost(final String url) {
 			return new Builder(url);
@@ -47,9 +52,18 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		private int lockDelayInSeconds = 0;
 		private long pollInterval = POLL_INTERVAL;
 		private long pollInitialDelay = POLL_INITIAL_DELAY;
+		private int createSessionTries = DEFAULT_TRIES;
+		private int retryPeriod = DEFAULT_RETRY_PERIOD;
+		private double backOffMultiplier = DEFAULT_BACKOFF_MULTIPLIER;
+		private boolean allowIslandMode = true;
 
 		private Builder(final String url) {
 			this.consulUrl = url;
+		}
+
+		public Builder allowingIslandMode(final boolean flag) {
+			this.allowIslandMode = flag;
+			return this;
 		}
 
 		public ConsulLeaderElector build() throws Exception {
@@ -58,7 +72,9 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 					Optional.ofNullable(username), Optional.ofNullable(password),
 					serviceName,
 					routeId, camelContext,
-					ttlInSeconds, lockDelayInSeconds);
+					ttlInSeconds, lockDelayInSeconds,
+					allowIslandMode,
+					createSessionTries, retryPeriod, backOffMultiplier);
 			logger.debug("pollInitialDelay={} pollInterval={}", pollInitialDelay, pollInterval);
 			executor.scheduleAtFixedRate(consulLeaderElector, pollInitialDelay, pollInterval, TimeUnit.SECONDS);
 			camelContext.addLifecycleStrategy(consulLeaderElector);
@@ -91,6 +107,14 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 			return this;
 		}
 
+		public Builder usingRetryStrategy(final int countOfTries, final int retryPeriodBase,
+				final int backOffMultiplier) {
+			this.createSessionTries = countOfTries;
+			this.retryPeriod = retryPeriodBase;
+			this.backOffMultiplier = backOffMultiplier;
+			return this;
+		}
+
 		public Builder usingServiceName(final String serviceName) {
 			this.serviceName = serviceName;
 			return this;
@@ -116,37 +140,48 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	private static final ObjectMapper objectMapper = new ObjectMapper();
 
 	private static Optional<String> createSession(final Executor executor, final String consulUrl, final String serviceName,
-			final int ttlInSeconds, final int lockDelayInSeconds) {
+			final int ttlInSeconds, final int lockDelayInSeconds, final int createSessionTries, final int retryPeriod,
+			final double backOffMultiplier) {
 		HttpResponse response;
-		try {
-			final String sessionUrl = String.format("%s/v1/session/create", consulUrl);
-			final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\", \"LockDelay\" : \"%ds\"}",
-					serviceName,
-					10 > ttlInSeconds ? 10 : ttlInSeconds,
-					0 > ttlInSeconds ? 0 : ttlInSeconds);
-			logger.debug("PUT {}\n{}", sessionUrl, sessionBody);
-			response = executor.execute(
-					Request.Put(sessionUrl)
-							.bodyString(
-									sessionBody,
-									ContentType.APPLICATION_JSON))
-					.returnResponse();
-			if (response.getStatusLine().getStatusCode() == 200) {
-				final Optional<String> newSessionKey = unpackSessionKey(response.getEntity());
-				logger.info("Consul sessionKey={}", newSessionKey);
-				return newSessionKey;
-			} else {
-				logger.warn("Unable to obtain sessionKey -- will continue as an island: {}",
-						EntityUtils.toString(response.getEntity()));
-				return Optional.empty();
+		for (int i = 0; i < createSessionTries; i++) {
+			try {
+				final String sessionUrl = String.format("%s/v1/session/create", consulUrl);
+				final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\", \"LockDelay\" : \"%ds\"}",
+						serviceName,
+						10 > ttlInSeconds ? 10 : ttlInSeconds,
+						0 > ttlInSeconds ? 0 : ttlInSeconds);
+				logger.debug("PUT {}\n{}", sessionUrl, sessionBody);
+				response = executor.execute(
+						Request.Put(sessionUrl)
+								.bodyString(
+										sessionBody,
+										ContentType.APPLICATION_JSON))
+						.returnResponse();
+				if (response.getStatusLine().getStatusCode() == 200) {
+					final Optional<String> newSessionKey = unpackSessionKey(response.getEntity());
+					logger.info("Consul sessionKey={}", newSessionKey);
+					return newSessionKey;
+				} else {
+					logger.warn("Unable to obtain sessionKey: {}/{}",
+							response.getStatusLine().toString(), EntityUtils.toString(response.getEntity()));
+				}
+			} catch (final ClientProtocolException e) {
+				logger.warn("Failed to obtain sessionKey \"{}\"", e.getMessage());
+			} catch (final IOException e) {
+				logger.error("Failed to obtain sessionKey \"{}\"", e.getMessage());
 			}
-		} catch (final ClientProtocolException e) {
-			logger.warn("Failed to obtain sessionKey \"{}\" -- will continue as an island", e.getMessage());
-			return Optional.empty();
-		} catch (final IOException e) {
-			logger.error("Failed to obtain sessionKey \"{}\" -- will continue as an island", e.getMessage());
-			return Optional.empty();
+			logger.info("Failed to create session try {}/{}", i, createSessionTries);
+			try {
+				Thread.sleep(
+						TimeUnit.MILLISECONDS.convert(
+								(long) (retryPeriod * ((i + 1) * Math.max(1, i * backOffMultiplier))),
+								TimeUnit.SECONDS));
+			} catch (final InterruptedException e) {
+				logger.warn("Sleep interrupted");
+			}
 		}
+		logger.error("Failed to obtain sessionKey -- will potentially continue as an island");
+		return Optional.empty();
 	}
 
 	private static void destroySession(final Executor executor, final String consulUrl, final String sessionKey) {
@@ -281,7 +316,8 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 
 	protected ConsulLeaderElector(
 			final String consulUrl, final Optional<String> username, final Optional<String> password, final String serviceName,
-			final String routeToControl, final CamelContext camelContext, final int ttlInseconds, final int lockDelayInSeconds)
+			final String routeToControl, final CamelContext camelContext, final int ttlInseconds, final int lockDelayInSeconds,
+			final boolean allowIslandMode, final int createSessionTries, final int retryPeriod, final double backOffMultiplier)
 					throws Exception {
 		this.consulUrl = consulUrl;
 		this.serviceName = serviceName;
@@ -295,7 +331,10 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 					.auth(username.get(), password.get())
 					.authPreemptive(new HttpHost(new URL(consulUrl).getHost()));
 		}
-		this.sessionKey = getSessionKey(ttlInseconds, lockDelayInSeconds);
+		this.sessionKey = getSessionKey(ttlInseconds, lockDelayInSeconds, createSessionTries, retryPeriod, backOffMultiplier);
+		if (!this.sessionKey.isPresent() && !allowIslandMode) {
+			logger.error("Island mode disabled -- terminating abruptly!");
+		}
 	}
 
 	private void destroySession(final Optional<String> sessionKey) {
@@ -316,9 +355,11 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		});
 	}
 
-	private Optional<String> getSessionKey(final int ttlInseconds, final int lockDelayInSeconds) {
+	private Optional<String> getSessionKey(final int ttlInseconds, final int lockDelayInSeconds, final int createSessionTries,
+			final int retryPeriod, final double backOffMultiplier) {
 		if (!sessionKey.isPresent()) {
-			return createSession(executor, consulUrl, serviceName, ttlInseconds, lockDelayInSeconds);
+			return createSession(executor, consulUrl, serviceName, ttlInseconds, lockDelayInSeconds, createSessionTries, retryPeriod,
+					backOffMultiplier);
 		} else {
 			return sessionKey;
 		}
@@ -332,7 +373,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	@Override
 	public void onContextStop(final CamelContext context) {
 		super.onContextStop(context);
-		final Optional<String> sessionKey = getSessionKey(2, 0);
+		final Optional<String> sessionKey = getSessionKey(2, 0, 1, 0, 0);
 		destroySession(sessionKey);
 	}
 
