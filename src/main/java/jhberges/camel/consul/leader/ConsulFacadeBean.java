@@ -193,8 +193,8 @@ public class ConsulFacadeBean {
 						.returnResponse();
 				if (response.getStatusLine().getStatusCode() == 200) {
 					final Optional<String> leaderSessionKey = unpackCurrentSessionOnKey(response.getEntity());
-					logger.debug("Consul current leader: service=\"{}\", sessionKey=\"{}\"", serviceName, leaderSessionKey);
-					return leaderSessionKey.map(s -> s.equals(_sessionKey)).isPresent();
+					logger.debug("Consul current leader: service=\"{}\", sessionKey=\"{}\" mySession=\"{}\"", serviceName, leaderSessionKey, _sessionKey);
+					return leaderSessionKey.filter(s -> s.equals(_sessionKey)).isPresent();
 				} else {
 					logger.debug("Unable to obtain current leader -- will continue as an not the current leader: {}",
 							EntityUtils.toString(response.getEntity()));
