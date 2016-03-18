@@ -61,6 +61,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	@Override
 	public void run() {
 		final Optional<Boolean> isLeader = consulFacade.pollConsul(serviceName);
+		logger.debug("Poll result isLeader={} allowIslandMode={}", isLeader, allowIslandMode);
 		try {
 			if (isLeader.orElse(allowIslandMode)) { // I.e if explicitly leader, or poll
 											// failed.
