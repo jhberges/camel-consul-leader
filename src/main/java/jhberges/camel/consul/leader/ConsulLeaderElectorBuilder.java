@@ -55,12 +55,13 @@ public class ConsulLeaderElectorBuilder {
 		final ConsulLeaderElector consulLeaderElector = new ConsulLeaderElector(
 				new ConsulFacadeBean(
 						consulUrl,
-						Optional.ofNullable(username), Optional.ofNullable(password)),
+						Optional.ofNullable(username), Optional.ofNullable(password),
+						ttlInSeconds, lockDelayInSeconds,
+						allowIslandMode,
+						createSessionTries, retryPeriod, backOffMultiplier),
 				serviceName,
 				routeId, camelContext, producerTemplate,
-				ttlInSeconds, lockDelayInSeconds,
-				allowIslandMode,
-				createSessionTries, retryPeriod, backOffMultiplier);
+				allowIslandMode);
 		logger.debug("pollInitialDelay={} pollInterval={}", pollInitialDelay, pollInterval);
 		executor.scheduleAtFixedRate(consulLeaderElector, pollInitialDelay, pollInterval, TimeUnit.SECONDS);
 		camelContext.addLifecycleStrategy(consulLeaderElector);

@@ -1,5 +1,6 @@
 package jhberges.camel.consul.leader;
 
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -21,15 +22,13 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	private final ProducerTemplate producerTemplate;
 	private final String serviceName;
 	private final boolean allowIslandMode;
-	private Optional<String> sessionKey = Optional.empty();
 	private final ConsulFacadeBean consulFacade;
 
 	protected ConsulLeaderElector(
 			final ConsulFacadeBean consulFacade,
 			final String serviceName,
 			final String routeToControl, final CamelContext camelContext, final ProducerTemplate producerTemplate,
-			final int ttlInseconds, final int lockDelayInSeconds,
-			final boolean allowIslandMode, final int createSessionTries, final int retryPeriod, final double backOffMultiplier)
+			final boolean allowIslandMode)
 					throws Exception {
 		this.consulFacade = consulFacade;
 		this.serviceName = serviceName;
@@ -37,21 +36,10 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		this.camelContext = camelContext;
 		this.producerTemplate = producerTemplate;
 		this.allowIslandMode = allowIslandMode;
-		this.sessionKey = getSessionKey(ttlInseconds, lockDelayInSeconds, createSessionTries, retryPeriod, backOffMultiplier);
-		if (!this.sessionKey.isPresent() && !allowIslandMode) {
+		Optional<String> sessionKey = consulFacade.initSessionKey(serviceName);
+		if (!sessionKey.isPresent() && !allowIslandMode) {
 			logger.error("Island mode disabled -- terminating abruptly!");
 			TERMINATION_CALLBACK.run();
-		}
-	}
-
-	private Optional<String> getSessionKey(final int ttlInseconds, final int lockDelayInSeconds, final int createSessionTries,
-			final int retryPeriod, final double backOffMultiplier) {
-		if (!sessionKey.isPresent()) {
-			return consulFacade.createSession(
-					serviceName, ttlInseconds, lockDelayInSeconds,
-					createSessionTries, retryPeriod, backOffMultiplier);
-		} else {
-			return sessionKey;
 		}
 	}
 
@@ -63,13 +51,17 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	@Override
 	public void onContextStop(final CamelContext context) {
 		super.onContextStop(context);
-		final Optional<String> sessionKey = getSessionKey(2, 0, 1, 0, 0);
-		consulFacade.destroySession(sessionKey, serviceName);
+		try {
+			consulFacade.close();
+		} catch (IOException e) {
+			logger.debug("Exception while closing facade: {}", e.getMessage());
+		}
 	}
 
 	@Override
 	public void run() {
-		final Optional<Boolean> isLeader = consulFacade.pollConsul(sessionKey, serviceName);
+		final Optional<Boolean> isLeader = consulFacade.pollConsul(serviceName);
+		logger.debug("Poll result isLeader={} allowIslandMode={}", isLeader, allowIslandMode);
 		try {
 			if (isLeader.orElse(allowIslandMode)) { // I.e if explicitly leader, or poll
 											// failed.
