@@ -36,7 +36,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		this.camelContext = camelContext;
 		this.producerTemplate = producerTemplate;
 		this.allowIslandMode = allowIslandMode;
-		Optional<String> sessionKey = consulFacade.initSessionKey(serviceName);
+		final Optional<String> sessionKey = consulFacade.initSessionKey(serviceName);
 		if (!sessionKey.isPresent() && !allowIslandMode) {
 			logger.error("Island mode disabled -- terminating abruptly!");
 			TERMINATION_CALLBACK.run();
@@ -53,7 +53,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 		super.onContextStop(context);
 		try {
 			consulFacade.close();
-		} catch (IOException e) {
+		} catch (final IOException e) {
 			logger.debug("Exception while closing facade: {}", e.getMessage());
 		}
 	}
@@ -61,7 +61,7 @@ public class ConsulLeaderElector extends LifecycleStrategySupport implements Run
 	@Override
 	public void run() {
 		final Optional<Boolean> isLeader = consulFacade.pollConsul(serviceName);
-		logger.debug("Poll result isLeader={} allowIslandMode={}", isLeader, allowIslandMode);
+		logger.debug("Poll result serviceName={} isLeader={} allowIslandMode={}", serviceName, isLeader, allowIslandMode);
 		try {
 			if (isLeader.orElse(allowIslandMode)) { // I.e if explicitly leader, or poll
 											// failed.

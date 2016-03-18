@@ -41,16 +41,17 @@ public class ConsulFacadeBean implements Closeable {
 
 	private boolean renewSession(final Executor executor, final String url, final String serviceName) throws IOException {
 		assert sessionKey.isPresent();
-		String _sessionKey = sessionKey.get();
+		final String _sessionKey = sessionKey.get();
 		final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
 		logger.debug("PUT {}", uri);
 		final Response response = executor.execute(Request.Put(uri));
 		boolean renewedOk = response.returnResponse().getStatusLine().getStatusCode() == 200;
-		
+
 		logger.debug("Session {} renewed={}", _sessionKey, renewedOk);
 		if (!renewedOk) {
 			logger.debug("Attempting to re-establish session for serviceName={}", serviceName);
 			destroySession(url, _sessionKey);
+			sessionKey = Optional.empty();
 			sessionKey = initSessionKey(serviceName);
 			renewedOk = sessionKey.isPresent();
 		}
@@ -95,8 +96,8 @@ public class ConsulFacadeBean implements Closeable {
 	private int retryPeriod;
 	private double backOffMultiplier;
 
-	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password, 
-			int ttlInSeconds, int lockDelayInSeconds, boolean allowIslandMode, int createSessionTries, int retryPeriod, double backOffMultiplier)
+	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password,
+			final int ttlInSeconds, final int lockDelayInSeconds, final boolean allowIslandMode, final int createSessionTries, final int retryPeriod, final double backOffMultiplier)
 			throws MalformedURLException {
 		this(consulUrl, username, password, Executor.newInstance());
 		this.ttlInSeconds = ttlInSeconds;
@@ -198,8 +199,8 @@ public class ConsulFacadeBean implements Closeable {
 
 	}
 
-	public Optional<String> initSessionKey(String serviceName) {
-		
+	public Optional<String> initSessionKey(final String serviceName) {
+
 		if (!sessionKey.isPresent()) {
 			sessionKey = createSession(
 					serviceName, ttlInSeconds, lockDelayInSeconds,
@@ -246,7 +247,7 @@ public class ConsulFacadeBean implements Closeable {
 						logger.debug("PUT {}", uri);
 						final Response response = executor.execute(Request.Put(uri));
 						final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
-						logger.debug("pollConsul - Result: {}", result);
+						logger.debug("pollConsul - session={} service={} result={}", sessionKey.get(), serviceName, result);
 						return result;
 					}
 				} else {
