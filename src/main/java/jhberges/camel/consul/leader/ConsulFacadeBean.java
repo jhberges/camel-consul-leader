@@ -1,5 +1,6 @@
 package jhberges.camel.consul.leader;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -24,10 +25,11 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-public class ConsulFacadeBean {
+public class ConsulFacadeBean implements Closeable {
 	private static final Logger logger = LoggerFactory.getLogger(ConsulFacadeBean.class);
 
 	private static final ObjectMapper objectMapper = new ObjectMapper();
+	private Optional<String> sessionKey = Optional.empty();
 
 	private static String leaderKey(final String baseUrl, final String serviceName, final String command, final String sessionKey) {
 		return String.format("%s/v1/kv/service/%s/leader?%s=%s", baseUrl, serviceName, command, sessionKey);
@@ -84,9 +86,28 @@ public class ConsulFacadeBean {
 
 	private final Executor executor;
 
-	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password)
+	private int ttlInSeconds;
+
+	private int lockDelayInSeconds;
+
+	private boolean allowIslandMode;
+
+	private int createSessionTries;
+
+	private int retryPeriod;
+
+	private double backOffMultiplier;
+
+	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password, 
+			int ttlInSeconds, int lockDelayInSeconds, boolean allowIslandMode, int createSessionTries, int retryPeriod, double backOffMultiplier)
 			throws MalformedURLException {
 		this(consulUrl, username, password, Executor.newInstance());
+		this.ttlInSeconds = ttlInSeconds;
+		this.lockDelayInSeconds = lockDelayInSeconds;
+		this.allowIslandMode = allowIslandMode;
+		this.createSessionTries = createSessionTries;
+		this.retryPeriod = retryPeriod;
+		this.backOffMultiplier = backOffMultiplier;
 	}
 
 	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password,
@@ -183,6 +204,17 @@ public class ConsulFacadeBean {
 
 	}
 
+	public Optional<String> initSessionKey(String serviceName) {
+		
+		if (!sessionKey.isPresent()) {
+			sessionKey = createSession(
+					serviceName, ttlInSeconds, lockDelayInSeconds,
+					createSessionTries, retryPeriod, backOffMultiplier);
+		}
+		return sessionKey;
+	}
+
+
 	public boolean isCurrentLeader(final String url, final String serviceName, final Optional<String> sessionKey) {
 		return sessionKey.map(_sessionKey -> {
 			try {
@@ -207,8 +239,7 @@ public class ConsulFacadeBean {
 		}).orElse(Boolean.FALSE);
 	}
 
-	public Optional<Boolean> pollConsul(final Optional<String> sessionKey,
-			final String serviceName) {
+	public Optional<Boolean> pollConsul(final String serviceName) {
 		return sessionKey.map(_sessionKey -> {
 			try {
 				if (renewSession(executor, consulUrl, _sessionKey)) {
@@ -233,6 +264,11 @@ public class ConsulFacadeBean {
 				return Optional.<Boolean> empty();
 			}
 		}).orElse(Optional.empty());
+	}
+
+	@Override
+	public void close() throws IOException {
+		sessionKey.ifPresent(_session -> destroySession(consulUrl, _session));
 	}
 
 }
