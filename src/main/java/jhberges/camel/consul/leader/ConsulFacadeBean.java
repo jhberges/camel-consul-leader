@@ -39,12 +39,21 @@ public class ConsulFacadeBean implements Closeable {
 		return String.format("%s/v1/kv/service/%s/leader", baseUrl, serviceName);
 	}
 
-	private static boolean renewSession(final Executor executor, final String url, final String _sessionKey) throws IOException {
+	private boolean renewSession(final Executor executor, final String url, final String serviceName) throws IOException {
+		assert sessionKey.isPresent();
+		String _sessionKey = sessionKey.get();
 		final String uri = String.format("%s/v1/session/renew/%s", url, _sessionKey);
 		logger.debug("PUT {}", uri);
 		final Response response = executor.execute(Request.Put(uri));
-		final boolean renewedOk = response.returnResponse().getStatusLine().getStatusCode() == 200;
+		boolean renewedOk = response.returnResponse().getStatusLine().getStatusCode() == 200;
+		
 		logger.debug("Session {} renewed={}", _sessionKey, renewedOk);
+		if (!renewedOk) {
+			logger.debug("Attempting to re-establish session for serviceName={}", serviceName);
+			destroySession(url, _sessionKey);
+			sessionKey = initSessionKey(serviceName);
+			renewedOk = sessionKey.isPresent();
+		}
 		return renewedOk;
 	}
 
@@ -79,23 +88,11 @@ public class ConsulFacadeBean implements Closeable {
 	}
 
 	private final String consulUrl;
-
-	private final Optional<String> username;
-
-	private final Optional<String> password;
-
 	private final Executor executor;
-
 	private int ttlInSeconds;
-
 	private int lockDelayInSeconds;
-
-	private boolean allowIslandMode;
-
 	private int createSessionTries;
-
 	private int retryPeriod;
-
 	private double backOffMultiplier;
 
 	public ConsulFacadeBean(final String consulUrl, final Optional<String> username, final Optional<String> password, 
@@ -104,7 +101,6 @@ public class ConsulFacadeBean implements Closeable {
 		this(consulUrl, username, password, Executor.newInstance());
 		this.ttlInSeconds = ttlInSeconds;
 		this.lockDelayInSeconds = lockDelayInSeconds;
-		this.allowIslandMode = allowIslandMode;
 		this.createSessionTries = createSessionTries;
 		this.retryPeriod = retryPeriod;
 		this.backOffMultiplier = backOffMultiplier;
@@ -114,8 +110,6 @@ public class ConsulFacadeBean implements Closeable {
 			final Executor executor)
 					throws MalformedURLException {
 		this.consulUrl = consulUrl;
-		this.username = username;
-		this.password = password;
 		this.executor = executor;
 		if (username.isPresent()) {
 			executor
@@ -240,20 +234,19 @@ public class ConsulFacadeBean implements Closeable {
 	}
 
 	public Optional<Boolean> pollConsul(final String serviceName) {
-		return sessionKey.map(_sessionKey -> {
+		if (sessionKey.isPresent()) {
 			try {
-				if (renewSession(executor, consulUrl, _sessionKey)) {
+				if (renewSession(executor, consulUrl, serviceName)) {
 					if (isCurrentLeader(consulUrl, serviceName, sessionKey)) {
 						logger.debug("I am the current leader, no need to acquire leadership");
 						return Optional.of(true);
 					} else {
 						logger.debug("I am not the current leader, and I need to acquire leadership");
-						final String uri = leaderKey(consulUrl, serviceName, "acquire", _sessionKey);
+						final String uri = leaderKey(consulUrl, serviceName, "acquire", sessionKey.get());
 						logger.debug("PUT {}", uri);
-						final Response response = executor.execute(Request
-								.Put(uri));
+						final Response response = executor.execute(Request.Put(uri));
 						final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
-						logger.debug("Result: {}", result);
+						logger.debug("pollConsul - Result: {}", result);
 						return result;
 					}
 				} else {
@@ -263,7 +256,10 @@ public class ConsulFacadeBean implements Closeable {
 				logger.warn("Failed to poll consul for leadership: {}", exception.getMessage());
 				return Optional.<Boolean> empty();
 			}
-		}).orElse(Optional.empty());
+		} else {
+			sessionKey = initSessionKey(serviceName);
+			return Optional.of(false);
+		}
 	}
 
 	@Override
