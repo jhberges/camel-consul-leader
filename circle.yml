@@ -8,5 +8,5 @@ test:
     - find . -type f -regex ".*/target/surefire-reports/.*xml" -exec cp {} $CIRCLE_TEST_REPORTS/junit/ \;
     - mkdir -p $CIRCLE_ARTIFACTS/jacoco/
     - find . -type f -regex ".*/target/site/jacoco/*" -exec cp {} $CIRCLE_ARTIFACTS/jacoco/ \;
-    - find . -type f -regex ".*/target/site/jacoco/*" -exec ls -l {} \;
+    - find . -exec ls -l {} \;
 
