@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.jhberges</groupId>
 	<artifactId>camel-consul-leader</artifactId>
@@ -26,6 +27,7 @@
 		<junit.version>4.12</junit.version>
 		<mockito.version>1.10.19</mockito.version>
 		<nexus-staging-maven-plugin.version>1.6.3</nexus-staging-maven-plugin.version>
+		<jacoco.version>0.7.6.201602180812</jacoco.version>
 		<maven-gpg-plugin.version>1.5</maven-gpg-plugin.version>
 		<maven-source-plugin.version>2.2.1</maven-source-plugin.version>
 		<maven-release-plugin.version>2.5</maven-release-plugin.version>
@@ -151,6 +153,51 @@
 					</execution>
 				</executions>
 			</plugin>
+
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<configuration>
+					<rules>
+						<rule>
+							<element>BUNDLE</element>
+							<limits>
+								<limit>
+									<counter>INSTRUCTION</counter>
+									<value>COVEREDRATIO</value>
+									<minimum>0.7</minimum>
+								</limit>
+								<limit>
+									<counter>BRANCH</counter>
+									<value>COVEREDRATIO</value>
+									<minimum>0.7</minimum>
+								</limit>
+							</limits>
+						</rule>
+					</rules>
+					<excludes>
+						<exclude>**/entity/*.class</exclude>
+						<exclude>**/*Exception.class</exclude>
+					</excludes>
+					<dumpOnExit>true</dumpOnExit>
+				</configuration>
+				<executions>
+					<execution>
+						<id>jacoco-initialize</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>jacoco-report</id>
+						<phase>package</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 	<organization>
@@ -162,7 +209,7 @@
 			<name>Jan-Helge Bergesen</name>
 			<organizationUrl>http://github.com/jhberges</organizationUrl>
 			<timezone>CET</timezone>
-			<roles>	
+			<roles>
 				<role>Developer</role>
 				<role>Initiator</role>
 			</roles>
@@ -171,7 +218,7 @@
 			<name>Steffen Jørgensen</name>
 			<organizationUrl>http://github.com/mrsteffenjo</organizationUrl>
 			<timezone>CET</timezone>
-			<roles>	
+			<roles>
 				<role>Developer</role>
 			</roles>
 		</developer>
