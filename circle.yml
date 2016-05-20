@@ -8,6 +8,5 @@ test:
     - find . -type f -regex ".*/target/surefire-reports/.*xml" -exec cp {} $CIRCLE_TEST_REPORTS/junit/ \;
     - mkdir -p $CIRCLE_ARTIFACTS/jacoco/
     - find ./target/site/jacoco/* -exec cp {} $CIRCLE_ARTIFACTS/jacoco/ \;
-    - mvn clean test jacoco:report coveralls:report
 
 
