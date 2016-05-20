@@ -1,5 +1,5 @@
 # camel-consul-leader
-[![Circle CI](https://circleci.com/gh/jhberges/camel-consul-leader.svg?style=svg)](https://circleci.com/gh/jhberges/camel-consul-leader)
+[![Circle CI](https://circleci.com/gh/jhberges/camel-consul-leader.svg?style=svg)](https://circleci.com/gh/jhberges/camel-consul-leader) [![Coverage Status](https://coveralls.io/repos/github/jhberges/camel-consul-leader/badge.svg?branch=master)](https://coveralls.io/github/jhberges/camel-consul-leader?branch=master)
 
 ## About
 This is an Apache Camel utility that will provide cluster wide leader election of a clustered route by using the ControlBus component to start and stop the route based on leader election in Consul.
