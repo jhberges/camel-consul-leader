@@ -248,6 +248,11 @@ public class ConsulFacadeBean implements Closeable {
 						final Response response = executor.execute(Request.Put(uri));
 						final Optional<Boolean> result = Optional.ofNullable(Boolean.valueOf(response.returnContent().asString()));
 						logger.debug("pollConsul - session={} service={} result={}", sessionKey.get(), serviceName, result);
+						result.ifPresent(flag -> {
+						    if (flag) {
+						        logger.info("Leadership acquired: session={} service={}", sessionKey.get(), serviceName);
+						    }
+						});
 						return result;
 					}
 				} else {
