@@ -129,7 +129,7 @@ public class ConsulFacadeBean implements Closeable {
 				final String sessionBody = String.format("{\"Name\": \"%s\", \"TTL\": \"%ds\", \"LockDelay\" : \"%ds\"}",
 						serviceName,
 						10 > ttlInSeconds ? 10 : ttlInSeconds,
-						0 > ttlInSeconds ? 0 : ttlInSeconds);
+						0 > lockDelayInSeconds ? 0 : lockDelayInSeconds);
 				logger.debug("PUT {}\n{}", sessionUrl, sessionBody);
 				response = executor.execute(
 						Request.Put(sessionUrl)
